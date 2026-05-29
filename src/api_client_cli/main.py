@@ -8,7 +8,7 @@ import requests
 FILE_NAME = os.path.expanduser("~/.api_client/requests.json")
 
 
-def _file_exsits() -> bool:
+def _file_exists() -> bool:
     if os.path.exists(FILE_NAME):
         return True
     else:
@@ -33,7 +33,7 @@ def arg_to_dict(input: str | list[str] | None) -> dict[str, str]:
 
 
 def save_argument(arg_name: str, values: dict):
-    if _file_exsits():
+    if _file_exists():
         with open(FILE_NAME, "r") as r:
             contents = json.loads(r.read())
 
@@ -50,13 +50,14 @@ def save_argument(arg_name: str, values: dict):
             w.write(json.dumps(contents))
 
     else:
+        os.makedirs(os.path.dirname(FILE_NAME), exist_ok=True)
         with open(FILE_NAME, "w") as w:
             w.write(json.dumps({arg_name: values}))
     pass
 
 
 def get_argument(arg_name: str) -> dict[str, str]:
-    if not _file_exsits():
+    if not _file_exists():
         return {}
 
     with open(FILE_NAME, "r") as r:
@@ -64,6 +65,7 @@ def get_argument(arg_name: str) -> dict[str, str]:
 
     if contents.get(arg_name, None) == None:
         print(f"No saved request for: {arg_name}")
+        return {}
     else:
         print(contents[arg_name])
 
@@ -76,7 +78,7 @@ def run_argument(arg_name: str) -> dict[str, str]:
 
 
 def list_argument():
-    if not _file_exsits():
+    if not _file_exists():
         return
     
     with open(FILE_NAME, "r") as r:
@@ -85,9 +87,21 @@ def list_argument():
     return
 
 def delete_argument(arg_name: str):
-    if not _file_exsits():
+    if not _file_exists():
         return
-    pass
+    
+    content: dict[str, str] = {}
+
+    with open(FILE_NAME, "r") as r:
+        content = json.loads(r.read())
+
+    if arg_name in content.keys():
+        del content[arg_name]
+
+        with open(FILE_NAME, "w") as w:
+            w.write(json.dumps(content))
+    else:
+        print(f"{arg_name} not found in the list of saved options")
 
 
 def main():
@@ -117,6 +131,7 @@ def main():
     send_parser.add_argument("--json-body", help="JSON Body")
     send_parser.add_argument("--params", help="HTTP parameters /?param=", nargs="+")
     send_parser.add_argument("--output", help="denote a file to save the response to")
+    send_parser.add_argument("--silent", help="don't print out response")
 
     ## ===================
     ## Save Request
@@ -139,6 +154,7 @@ def main():
     save_parse.add_argument("--json-body", help="JSON Body")
     save_parse.add_argument("--params", help="HTTP parameters /?param=", nargs="+")
     save_parse.add_argument("--output", help="denote a file to save the response to")
+    send_parser.add_argument("--silent", help="don't print out response")
 
     ## ===================
     ## Get Request
@@ -185,6 +201,7 @@ def main():
             "json_body": getattr(args, "json_body", None),
             "params": getattr(args, "params", None),
             "output": getattr(args, "output", None),
+            "silent": getattr(args, "silent", None)
         }
 
         values = {key: value for key, value in values.items() if value is not None}
@@ -201,6 +218,7 @@ def main():
             "json_body": getattr(args, "json_body", None),
             "params": getattr(args, "params", None),
             "output": getattr(args, "output", None),
+            "silent": getattr(args, "silent", None)
         }
 
         values = {key: value for key, value in values.items() if value is not None}
@@ -218,24 +236,27 @@ def main():
         delete_argument(args.name)
         return
 
-    r = requests.Response
-
-    if args.json_body:
-        body = arg_to_dict(args.json_body)
-    elif args.body:
-        body = args.body
-    else:
-        body = None
+    r = None
 
     methods = values.get("method", None)
     destination = values.get("URI", None)
     params = arg_to_dict(values.get("params", None))
     headers = arg_to_dict(values.get("headers", None))
+    json_body = values.get("json_body", None)
+    text_body = values.get("body", None)
+    silent = values.get("silent", None)
+    output = values.get("output", None)
+    
+    if not destination or not methods:
+        print("Cannot run saved request because it is missing method or URI")
+        return
 
-    print(body)
-
-    assert destination
-    assert methods
+    if json_body:
+        body = json.loads(json_body)
+    elif text_body:
+        body = text_body
+    else:
+        body = None
 
     if not isinstance(headers, dict) and headers is not None:
         return
@@ -247,7 +268,7 @@ def main():
 
         case "POST":
 
-            if args.body:
+            if text_body:
                 r = requests.post(
                     destination,
                     data=body,
@@ -265,7 +286,7 @@ def main():
                 r.raise_for_status()
 
         case "DELETE":
-            if args.body:
+            if text_body:
                 r = requests.delete(
                     destination,
                     data=body,
@@ -282,7 +303,7 @@ def main():
                 )
                 r.raise_for_status()
         case "PUT":
-            if args.body:
+            if text_body:
                 r = requests.put(
                     destination,
                     data=body,
@@ -303,15 +324,15 @@ def main():
             pass
 
     if r:
-        if not args.silent:
+        if not silent:
             print(r.status_code)
             print(r.headers)
             print(r.text)
         else:
             pass
 
-        if args.output:
-            with open(args.output, "w") as w:
+        if output:
+            with open(output, "w") as w:
                 w.write(str(r.text))
 
 
