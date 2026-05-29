@@ -154,7 +154,7 @@ def main():
     save_parse.add_argument("--json-body", help="JSON Body")
     save_parse.add_argument("--params", help="HTTP parameters /?param=", nargs="+")
     save_parse.add_argument("--output", help="denote a file to save the response to")
-    send_parser.add_argument("--silent", help="don't print out response")
+    save_parse.add_argument("--silent", help="don't print out response")
 
     ## ===================
     ## Get Request
@@ -178,11 +178,6 @@ def main():
     ## ===================
     delete_parse = subparsers.add_parser("delete")
     delete_parse.add_argument("name")
-
-    # Utilities
-    flags.add_argument(
-        "--silent", action="store_true", help="Print key output to the screen"
-    )
 
     args = flags.parse_args()
 
